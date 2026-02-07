@@ -32,3 +32,5 @@ jobs:
 
       - name: Push Docker image
         run: docker push docker.io/${{ secrets.DOCKER_USERNAME }}/nodejs-web-app:${{ github.sha }}
+
+        
