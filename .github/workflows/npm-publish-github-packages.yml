@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest   # free GitHub-hosted Linux runner
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -22,13 +22,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run tests
+        run: npm test
 
       # --- Docker build & push to Docker Hub ---
       - name: Log in to Docker Hub
-        run: echo ${{ secrets.DOCKER }} | docker login -u $(echo ${{ secrets.DOCKER }} | cut -d':' -f1) --password-stdin
+        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
       - name: Build Docker image
-        run: docker build -t docker.io/$(echo ${{ secrets.DOCKER }} | cut -d':' -f1)/nodejs-web-app:${{ github.sha }} .
+        run: docker build -t docker.io/${{ secrets.DOCKER_USERNAME }}/nodejs-web-app:${{ github.sha }} .
 
       - name: Push Docker image
-        run: docker push docker.io/$(echo ${{ secrets.DOCKER }} | cut -d':' -f1)/nodejs-web-app:${{ github.sha }}
+        run: docker push docker.io/${{ secrets.DOCKER_USERNAME }}/nodejs-web-app:${{ github.sha }}
