@@ -8,18 +8,26 @@ on:
 
 jobs:
   build:
-    runs-on:  self-hosted
+    runs-on: self-hosted   # your local Windows runner
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+      - name: Install Node.js manually
+        shell: powershell
+        run: |
+          curl -o nodejs.msi https://nodejs.org/dist/v18.19.0/node-v18.19.0-x64.msi
+          Start-Process msiexec.exe -ArgumentList '/i nodejs.msi /quiet /norestart' -Wait
+
+      - name: Verify Node.js installation
+        shell: powershell
+        run: node -v
 
       - name: Install dependencies
+        shell: powershell
         run: npm install
 
       - name: Run tests
+        shell: powershell
         run: npm test
