@@ -1,4 +1,4 @@
-name: Node.js CI
+name: Node.js CI/CD
 
 on:
   push:
@@ -21,11 +21,14 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-      - name: Log in to GitHub Container Registry
-        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin 
-      - name: Build Docker image
-        run: docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }}
-      - name: Push Docker image 
-        run: docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
-      
 
+
+      # --- Docker build & push to Docker Hub ---
+      - name: Log in to Docker Hub
+        run: echo ${{ secrets.DOCKER }} | docker login -u $(echo ${{ secrets.DOCKER }} | cut -d':' -f1) --password-stdin
+
+      - name: Build Docker image
+        run: docker build -t docker.io/$(echo ${{ secrets.DOCKER }} | cut -d':' -f1)/nodejs-web-app:${{ github.sha }} .
+
+      - name: Push Docker image
+        run: docker push docker.io/$(echo ${{ secrets.DOCKER }} | cut -d':' -f1)/nodejs-web-app:${{ github.sha }}
