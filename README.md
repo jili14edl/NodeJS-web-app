@@ -10,6 +10,43 @@
 
 Create a simple nodeJs application and deploy it onto a docker container.
 
+## CI/CD to EKS with Helm + ArgoCD (GitHub Actions OIDC)
+
+The repository includes a GitHub Actions workflow at [.github/workflows/eks-helm-argocd-oidc.yml](.github/workflows/eks-helm-argocd-oidc.yml) that builds, pushes, and deploys the app to an EKS cluster using Helm, then syncs the release via ArgoCD. It assumes AWS authentication via GitHub OIDC.
+
+### Prerequisites
+- An AWS IAM role trusted for GitHub OIDC with permissions for ECR (or your registry), EKS, and Helm-managed namespaces.
+- An EKS cluster reachable with `aws eks update-kubeconfig`.
+- A Helm chart for the app (path inside this repo, e.g., `./chart`).
+- ArgoCD accessible (username/password or auth token).
+
+### Configure the workflow
+Edit the env placeholders in [.github/workflows/eks-helm-argocd-oidc.yml](.github/workflows/eks-helm-argocd-oidc.yml):
+- `AWS_REGION`, `AWS_ROLE_ARN`, `EKS_CLUSTER_NAME`
+- `EKS_NAMESPACE`, `HELM_RELEASE`, `HELM_CHART_PATH`
+- `IMAGE_REPO` (e.g., `<aws_account_id>.dkr.ecr.<region>.amazonaws.com/nodejs-web-app`)
+- `ARGOCD_SERVER`, `ARGOCD_USERNAME`, `ARGOCD_PASSWORD` **or** `secrets.ARGOCD_AUTH_TOKEN`
+- `ARGOCD_APP_NAME`, `ARGOCD_DEST_NAMESPACE`, `ARGOCD_PROJECT`
+
+### Set GitHub secrets (recommended)
+- `AWS_ROLE_ARN`, `AWS_REGION`
+- `ARGOCD_AUTH_TOKEN` (preferred) or `ARGOCD_USERNAME` and `ARGOCD_PASSWORD`
+- If using a private registry different from ECR, add its credentials as needed.
+
+### What the workflow does
+1) Checkout, install Node 18, run `npm ci` and `npm test --if-present`.
+2) Assume AWS role via OIDC, log in to registry (ECR by default).
+3) Build and push image tagged with `GITHUB_SHA`.
+4) Update kubeconfig for the target EKS cluster.
+5) `helm upgrade --install` with `image.repository` and `image.tag` overrides.
+6) Install ArgoCD CLI, log in, create/update the ArgoCD app (upsert), then `argocd app sync` and wait for health.
+
+### Triggering
+- Automatically runs on `push` and `pull_request` to `master`.
+- For other branches or manual runs, adjust the `on:` block in [.github/workflows/eks-helm-argocd-oidc.yml](.github/workflows/eks-helm-argocd-oidc.yml).
+
+### Local quickstart (unchanged tutorial below)
+
 1. Create a working directory
     > mkdir <working_directory_name>
   
