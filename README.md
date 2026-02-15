@@ -12,38 +12,54 @@ Create a simple nodeJs application and deploy it onto a docker container.
 
 ## CI/CD to EKS with Helm + ArgoCD (GitHub Actions OIDC)
 
-The repository includes a GitHub Actions workflow at [.github/workflows/eks-helm-argocd-oidc.yml](.github/workflows/eks-helm-argocd-oidc.yml) that builds, pushes, and deploys the app to an EKS cluster using Helm, then syncs the release via ArgoCD. It assumes AWS authentication via GitHub OIDC.
+The workflow at [.github/workflows/eks-helm-argocd-oidc.yml](.github/workflows/eks-helm-argocd-oidc.yml) builds, pushes, and deploys to EKS with Helm, then syncs via ArgoCD. It authenticates to AWS with GitHub OIDC.
 
-### Prerequisites
-- An AWS IAM role trusted for GitHub OIDC with permissions for ECR (or your registry), EKS, and Helm-managed namespaces.
-- An EKS cluster reachable with `aws eks update-kubeconfig`.
-- A Helm chart for the app (path inside this repo, e.g., `./chart`).
-- ArgoCD accessible (username/password or auth token).
+### Values you need (and where to get them)
+- `AWS_ROLE_ARN`: IAM role that trusts GitHub OIDC; create in AWS IAM → Roles → “Web identity” with provider `token.actions.githubusercontent.com` and allow ECR/EKS permissions.
+- `AWS_REGION`: Region of your EKS cluster/ECR (e.g., `us-east-1`).
+- `EKS_CLUSTER_NAME`: From `aws eks list-clusters` or AWS console → EKS → cluster name.
+- `EKS_NAMESPACE`: Kubernetes namespace to deploy into (create if needed: `kubectl create ns <name>`).
+- `HELM_RELEASE`: Helm release name, e.g., `nodejs-web-app`.
+- `HELM_CHART_PATH`: Path to your chart in this repo (e.g., `./chart` or `./deploy/chart`).
+- `IMAGE_REPO`: Registry repo, e.g., ECR `$(aws sts get-caller-identity --query Account --output text).dkr.ecr.<region>.amazonaws.com/nodejs-web-app`.
+- `ARGOCD_SERVER`: Host:port of ArgoCD API, e.g., `argo.example.com:443`.
+- `ARGOCD_USERNAME`/`ARGOCD_PASSWORD` or `ARGOCD_AUTH_TOKEN`: From ArgoCD (Settings → Accounts or CLI `argocd account generate-token`).
+- `ARGOCD_APP_NAME`: Desired ArgoCD app name, e.g., `nodejs-web-app`.
+- `ARGOCD_DEST_NAMESPACE`: Namespace ArgoCD should deploy to (often same as `EKS_NAMESPACE`).
+- `ARGOCD_PROJECT`: ArgoCD project (default is `default`).
 
-### Configure the workflow
-Edit the env placeholders in [.github/workflows/eks-helm-argocd-oidc.yml](.github/workflows/eks-helm-argocd-oidc.yml):
+### One-time AWS/ECR/EKS prep
+1) Ensure an ECR repo exists (or create): `aws ecr create-repository --repository-name nodejs-web-app --region <region>`.
+2) Ensure kubeconfig works: `aws eks update-kubeconfig --name <cluster> --region <region>` then `kubectl get ns`.
+3) Namespace (if missing): `kubectl create namespace <namespace>`.
+
+### Configure GitHub Secrets
+In GitHub repo → Settings → Secrets and variables → Actions → New repository secret:
+- `AWS_ROLE_ARN`: your OIDC role ARN.
+- `AWS_REGION`: your region.
+- Prefer `ARGOCD_AUTH_TOKEN`; otherwise set `ARGOCD_USERNAME` and `ARGOCD_PASSWORD`.
+- If using a non-ECR registry, add its credentials as needed (e.g., `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`).
+
+### Edit workflow env placeholders
+Open [.github/workflows/eks-helm-argocd-oidc.yml](.github/workflows/eks-helm-argocd-oidc.yml) and set:
 - `AWS_REGION`, `AWS_ROLE_ARN`, `EKS_CLUSTER_NAME`
 - `EKS_NAMESPACE`, `HELM_RELEASE`, `HELM_CHART_PATH`
-- `IMAGE_REPO` (e.g., `<aws_account_id>.dkr.ecr.<region>.amazonaws.com/nodejs-web-app`)
-- `ARGOCD_SERVER`, `ARGOCD_USERNAME`, `ARGOCD_PASSWORD` **or** `secrets.ARGOCD_AUTH_TOKEN`
+- `IMAGE_REPO`
+- `ARGOCD_SERVER`, `ARGOCD_USERNAME`, `ARGOCD_PASSWORD` **or** use `secrets.ARGOCD_AUTH_TOKEN`
 - `ARGOCD_APP_NAME`, `ARGOCD_DEST_NAMESPACE`, `ARGOCD_PROJECT`
 
-### Set GitHub secrets (recommended)
-- `AWS_ROLE_ARN`, `AWS_REGION`
-- `ARGOCD_AUTH_TOKEN` (preferred) or `ARGOCD_USERNAME` and `ARGOCD_PASSWORD`
-- If using a private registry different from ECR, add its credentials as needed.
-
-### What the workflow does
+### How the workflow runs
 1) Checkout, install Node 18, run `npm ci` and `npm test --if-present`.
 2) Assume AWS role via OIDC, log in to registry (ECR by default).
-3) Build and push image tagged with `GITHUB_SHA`.
-4) Update kubeconfig for the target EKS cluster.
+3) Build & push image tagged with commit SHA.
+4) Update kubeconfig for EKS.
 5) `helm upgrade --install` with `image.repository` and `image.tag` overrides.
-6) Install ArgoCD CLI, log in, create/update the ArgoCD app (upsert), then `argocd app sync` and wait for health.
+6) Install ArgoCD CLI, log in, create/update app (upsert), sync, and wait for health.
 
-### Triggering
-- Automatically runs on `push` and `pull_request` to `master`.
-- For other branches or manual runs, adjust the `on:` block in [.github/workflows/eks-helm-argocd-oidc.yml](.github/workflows/eks-helm-argocd-oidc.yml).
+### Triggers and manual runs
+- Default: on `push` and `pull_request` to `master`.
+- To run manually: Actions tab → select this workflow → “Run workflow”.
+- To target other branches, edit the `on:` block in [.github/workflows/eks-helm-argocd-oidc.yml](.github/workflows/eks-helm-argocd-oidc.yml).
 
 ### Local quickstart (unchanged tutorial below)
 
