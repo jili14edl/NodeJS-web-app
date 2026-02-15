@@ -14,6 +14,11 @@ Create a simple nodeJs application and deploy it onto a docker container.
 
 The workflow at [.github/workflows/eks-helm-argocd-oidc.yml](.github/workflows/eks-helm-argocd-oidc.yml) builds, pushes, and deploys to EKS with Helm, then syncs via ArgoCD. It authenticates to AWS with GitHub OIDC.
 
+### Where the Helm chart lives and how it’s used
+- Chart path: [`chart/`](chart/Chart.yaml) with [`values.yaml`](chart/values.yaml) and templates for [Deployment](chart/templates/deployment.yaml) and [Service](chart/templates/service.yaml). Helpers are in [`_helpers.tpl`](chart/templates/_helpers.tpl).
+- The workflow’s `HELM_CHART_PATH` should be set to `./chart` (or your chosen path if you move it). It runs `helm upgrade --install` with `--set image.repository` and `--set image.tag` to point to the built image.
+- Default app container port is `8080` (matches [`server.js`](server.js:6)), and Service exposes port `80` → targetPort `8080`.
+
 ### Values you need (and where to get them)
 - `AWS_ROLE_ARN`: IAM role that trusts GitHub OIDC; create in AWS IAM → Roles → “Web identity” with provider `token.actions.githubusercontent.com` and allow ECR/EKS permissions.
 - `AWS_REGION`: Region of your EKS cluster/ECR (e.g., `us-east-1`).
