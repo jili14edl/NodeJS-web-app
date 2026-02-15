@@ -1,27 +1,39 @@
+{{- $releaseName := .Release.Name -}}
+{{- $chartName := include "nodejs-web-app.name" . -}}
+{{- $colors := list "blue" "green" -}}
+{{- range $idx, $color := $colors }}
+{{- $colorValues := (index $.Values.colors $color) -}}
+{{- if and $colorValues $colorValues.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "nodejs-web-app.fullname" . }}
+  name: {{ printf "%s-%s" (include "nodejs-web-app.fullname" $) $color }}
   labels:
-    app.kubernetes.io/name: {{ include "nodejs-web-app.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ $chartName }}
+    app.kubernetes.io/instance: {{ $releaseName }}
+    app.kubernetes.io/component: {{ $color }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ $.Values.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "nodejs-web-app.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ $chartName }}
+      app.kubernetes.io/instance: {{ $releaseName }}
+      app.kubernetes.io/component: {{ $color }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ include "nodejs-web-app.name" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: {{ $chartName }}
+        app.kubernetes.io/instance: {{ $releaseName }}
+        app.kubernetes.io/component: {{ $color }}
     spec:
       containers:
         - name: nodejs-web-app
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ $.Values.image.repository }}:{{ default $.Values.image.tag $colorValues.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
           ports:
-            - containerPort: {{ .Values.container.port }}
+            - containerPort: {{ $.Values.container.port }}
               name: http
-          resources: {{- toYaml .Values.resources | nindent 10 }}
+          resources: {{- toYaml $.Values.resources | nindent 10 }}
+---
+{{- end }}
+{{- end }}

@@ -1,9 +1,21 @@
 replicaCount: 1
 
+# Global image defaults; per-color overrides can be set under colors.<color>.tag
 image:
   repository: <registry/repository>
   tag: "latest"
   pullPolicy: IfNotPresent
+
+# Active color the Service will target: "blue" or "green"
+activeColor: blue
+
+colors:
+  blue:
+    enabled: true
+    tag: ""    # if empty, falls back to image.tag
+  green:
+    enabled: true
+    tag: ""    # if empty, falls back to image.tag
 
 service:
   type: ClusterIP

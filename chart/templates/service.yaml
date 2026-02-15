@@ -1,10 +1,12 @@
+{{- $chartName := include "nodejs-web-app.name" . -}}
+{{- $releaseName := .Release.Name -}}
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "nodejs-web-app.fullname" . }}
   labels:
-    app.kubernetes.io/name: {{ include "nodejs-web-app.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ $chartName }}
+    app.kubernetes.io/instance: {{ $releaseName }}
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -13,5 +15,6 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app.kubernetes.io/name: {{ include "nodejs-web-app.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ $chartName }}
+    app.kubernetes.io/instance: {{ $releaseName }}
+    app.kubernetes.io/component: {{ .Values.activeColor | default "blue" }}

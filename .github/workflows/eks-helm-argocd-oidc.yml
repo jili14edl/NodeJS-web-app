@@ -22,6 +22,9 @@ jobs:
       HELM_CHART_PATH: <relative-helm-chart-path>
       IMAGE_REPO: <registry/repository> # e.g. <aws_account_id>.dkr.ecr.<region>.amazonaws.com/nodejs-web-app
       IMAGE_TAG: ${{ github.sha }}
+      ACTIVE_COLOR: blue # set to blue or green to switch live traffic
+      COLOR_TAG_BLUE: ""  # optional override; falls back to IMAGE_TAG when empty
+      COLOR_TAG_GREEN: "" # optional override; falls back to IMAGE_TAG when empty
       ARGOCD_SERVER: <argocd-server-host:port>
       ARGOCD_USERNAME: <argocd-username>
       ARGOCD_PASSWORD: <argocd-password> # Prefer using SSO/token via secrets
@@ -78,7 +81,10 @@ jobs:
             --namespace "$EKS_NAMESPACE" \
             --create-namespace \
             --set image.repository="$IMAGE_REPO" \
-            --set image.tag="$IMAGE_TAG"
+            --set image.tag="$IMAGE_TAG" \
+            --set colors.blue.tag="${COLOR_TAG_BLUE:-$IMAGE_TAG}" \
+            --set colors.green.tag="${COLOR_TAG_GREEN:-$IMAGE_TAG}" \
+            --set activeColor="$ACTIVE_COLOR"
 
       - name: Install ArgoCD CLI
         run: |
@@ -108,6 +114,9 @@ jobs:
             --project "$ARGOCD_PROJECT" \
             --helm-set image.repository="$IMAGE_REPO" \
             --helm-set image.tag="$IMAGE_TAG" \
+            --helm-set colors.blue.tag="${COLOR_TAG_BLUE:-$IMAGE_TAG}" \
+            --helm-set colors.green.tag="${COLOR_TAG_GREEN:-$IMAGE_TAG}" \
+            --helm-set activeColor="$ACTIVE_COLOR" \
             --upsert
 
       - name: Sync and wait
