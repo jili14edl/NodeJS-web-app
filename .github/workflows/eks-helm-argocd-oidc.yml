@@ -1,0 +1,116 @@
+name: Node.js CI/CD to EKS via Helm and ArgoCD (OIDC)
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: <aws-region>
+      AWS_ROLE_ARN: <aws-oidc-role-arn>
+      EKS_CLUSTER_NAME: <eks-cluster-name>
+      EKS_NAMESPACE: <k8s-namespace>
+      HELM_RELEASE: <helm-release-name>
+      HELM_CHART_PATH: <relative-helm-chart-path>
+      IMAGE_REPO: <registry/repository> # e.g. <aws_account_id>.dkr.ecr.<region>.amazonaws.com/nodejs-web-app
+      IMAGE_TAG: ${{ github.sha }}
+      ARGOCD_SERVER: <argocd-server-host:port>
+      ARGOCD_USERNAME: <argocd-username>
+      ARGOCD_PASSWORD: <argocd-password> # Prefer using SSO/token via secrets
+      ARGOCD_APP_NAME: <argocd-app-name>
+      ARGOCD_DEST_NAMESPACE: <app-destination-namespace>
+      ARGOCD_DEST_SERVER: https://kubernetes.default.svc
+      ARGOCD_PROJECT: default
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+      REPO_REVISION: ${{ github.ref_name }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test --if-present
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR (or your registry)
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" | \
+            docker login --username AWS --password-stdin "${IMAGE_REPO%/*}"
+
+      - name: Build image
+        run: docker build -t "$IMAGE_REPO:$IMAGE_TAG" .
+
+      - name: Push image
+        run: docker push "$IMAGE_REPO:$IMAGE_TAG"
+
+      - name: Export image ref
+        run: echo "IMAGE_FULL=$IMAGE_REPO:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Update kubeconfig for EKS
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Helm upgrade/install
+        run: |
+          helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" \
+            --namespace "$EKS_NAMESPACE" \
+            --create-namespace \
+            --set image.repository="$IMAGE_REPO" \
+            --set image.tag="$IMAGE_TAG"
+
+      - name: Install ArgoCD CLI
+        run: |
+          VERSION="v2.11.0" # adjust if needed
+          curl -sSL -o /usr/local/bin/argocd "https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-linux-amd64"
+          chmod +x /usr/local/bin/argocd
+
+      - name: Login to ArgoCD
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN || '' }}
+        run: |
+          if [ -n "$ARGOCD_AUTH_TOKEN" ]; then
+            argocd login "$ARGOCD_SERVER" --insecure --grpc-web --auth-token "$ARGOCD_AUTH_TOKEN"
+          else
+            argocd login "$ARGOCD_SERVER" --insecure --grpc-web \
+              --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD"
+          fi
+
+      - name: Create/Update ArgoCD app
+        run: |
+          argocd app create "$ARGOCD_APP_NAME" \
+            --repo "$REPO_URL" \
+            --path "$HELM_CHART_PATH" \
+            --revision "$REPO_REVISION" \
+            --dest-namespace "$ARGOCD_DEST_NAMESPACE" \
+            --dest-server "$ARGOCD_DEST_SERVER" \
+            --project "$ARGOCD_PROJECT" \
+            --helm-set image.repository="$IMAGE_REPO" \
+            --helm-set image.tag="$IMAGE_TAG" \
+            --upsert
+
+      - name: Sync and wait
+        run: |
+          argocd app sync "$ARGOCD_APP_NAME" --grpc-web --timeout 600
+          argocd app wait "$ARGOCD_APP_NAME" --health --grpc-web --timeout 600
