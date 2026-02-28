@@ -14,8 +14,8 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
-      AWS_REGION: <aws-region>
-      AWS_ROLE_ARN: <aws-oidc-role-arn>
+      AWS_REGION: ap-south-1
+      AWS_ROLE_ARN: 
       EKS_CLUSTER_NAME: <eks-cluster-name>
       EKS_NAMESPACE: <k8s-namespace>
       HELM_RELEASE: <helm-release-name>
